@@ -4,10 +4,12 @@ import com.fitness.userservice.dto.RegisterRequest;
 import com.fitness.userservice.dto.UserResponse;
 import com.fitness.userservice.model.User;
 import com.fitness.userservice.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
+@Slf4j
 public class UserService {
     @Autowired
     private UserRepository userRepository;
@@ -32,5 +34,10 @@ public class UserService {
         User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("用户不存在"));
         return new UserResponse(user.getId(), user.getEmail(), user.getPassword(),
                 user.getFirstName(), user.getLastName(), user.getCreatedAt(), user.getUpdatedAt());
+    }
+
+    public Boolean existByUserId(String userId) {
+        log.info("调用用户验证api来获取用户ID: {}",userId);
+        return userRepository.existsById(userId);
     }
 }
