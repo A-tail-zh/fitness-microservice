@@ -1,0 +1,48 @@
+server:
+  port: 8083
+
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/fitnessrecommendation
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 3000   # 首次重试间隔 3s
+          max-attempts: 3           # 最多重试 3 次
+          multiplier: 2.0           # 指数退避系数
+    
+
+
+rabbitmq:
+  exchange:
+    name: fitness.change
+  queue:
+    name: activity.queue  # 修正：添加 name 键
+  routing:
+    key: activity.tracking  # 修正：添加 key 键
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+dashscope:
+  api-key: ${QWEN_API_KEY}
+  model: ${QWEN_MODEL:qwen-plus}  # 默认 qwen-plus
+  url: ${QWEN_URL}
+
+logging:
+  level:
+    com.fitness.aiservice: DEBUG
+
