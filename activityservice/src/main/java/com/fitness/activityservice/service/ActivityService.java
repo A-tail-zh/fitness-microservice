@@ -2,6 +2,8 @@ package com.fitness.activityservice.service;
 
 import com.fitness.activityservice.dto.ActivityRequest;
 import com.fitness.activityservice.dto.ActivityResponse;
+import com.fitness.activityservice.exception.ActivityNotFoundException;
+import com.fitness.activityservice.exception.InvalidUserException;
 import com.fitness.activityservice.model.Activity;
 import com.fitness.activityservice.repository.ActivityRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,12 +30,10 @@ public class ActivityService {
     private String routingKey;
 
     public ActivityResponse trackActivity(ActivityRequest request) {
-
-        boolean isValidUSer = userValidationService.validateUser(request.getUserId());
-        if(!isValidUSer){
-            throw new RuntimeException("无效用户: " + request.getUserId());
+        boolean isValidUser = userValidationService.validateUser(request.getUserId());
+        if (!isValidUser) {
+            throw new InvalidUserException("无效用户: " + request.getUserId());
         }
-
 
         Activity activity = Activity.builder()
                 .userId(request.getUserId())
@@ -43,33 +43,42 @@ public class ActivityService {
                 .startTime(request.getStartTime())
                 .additionalMetrics(request.getAdditionalMetrics())
                 .build();
+
         Activity savedActivity = activityRepository.save(activity);
 
-
-        //推送活动信息到RabbitMQ
-        try{
+        try {
             rabbitTemplate.convertAndSend(exchange, routingKey, savedActivity);
-        }catch (Exception e){
-            log.error("推送活动信息到RabbitMQ失败: {}", e.getMessage());
+        } catch (Exception e) {
+            log.error("推送活动信息到 RabbitMQ 失败，activityId={}", savedActivity.getId(), e);
         }
 
         return mapToActivityResponse(savedActivity);
     }
 
-    private ActivityResponse mapToActivityResponse(Activity activity) {
-        return new ActivityResponse(activity.getId(), activity.getUserId(), activity.getType(), activity.getDuration(),
-                activity.getCalorieBurned(), activity.getStartTime(), activity.getAdditionalMetrics(),
-                activity.getCreatedAt(), activity.getUpdatedAt());
-    }
-
-
     public List<ActivityResponse> getUserActivities(String userId) {
-            return activityRepository.findByUserId(userId);
+        return activityRepository.findByUserId(userId)
+                .stream()
+                .map(this::mapToActivityResponse)
+                .toList();
     }
 
     public ActivityResponse getActivityById(String activityId) {
         return activityRepository.findById(activityId)
                 .map(this::mapToActivityResponse)
-                .orElseThrow(()->new RuntimeException("活动不存在"));
+                .orElseThrow(() -> new ActivityNotFoundException("活动不存在，id=" + activityId));
+    }
+
+    private ActivityResponse mapToActivityResponse(Activity activity) {
+        return new ActivityResponse(
+                activity.getId(),
+                activity.getUserId(),
+                activity.getType(),
+                activity.getDuration(),
+                activity.getCalorieBurned(),
+                activity.getStartTime(),
+                activity.getAdditionalMetrics(),
+                activity.getCreatedAt(),
+                activity.getUpdatedAt()
+        );
     }
 }

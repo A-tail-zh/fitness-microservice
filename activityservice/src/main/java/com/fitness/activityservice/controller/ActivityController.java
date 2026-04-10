@@ -3,24 +3,24 @@ package com.fitness.activityservice.controller;
 import com.fitness.activityservice.dto.ActivityRequest;
 import com.fitness.activityservice.dto.ActivityResponse;
 import com.fitness.activityservice.service.ActivityService;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("api/activities")
+@RequestMapping("/api/activities")
+@RequiredArgsConstructor
 public class ActivityController {
 
-    @Autowired
-    private ActivityService activityService;
-
-
+    private final ActivityService activityService;
 
     @PostMapping
-    public ResponseEntity<ActivityResponse> trackActivity(@RequestBody ActivityRequest request) {
-        return ResponseEntity.ok(activityService.trackActivity(request));
+    public ResponseEntity<ActivityResponse> trackActivity(@Valid @RequestBody ActivityRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(activityService.trackActivity(request));
     }
 
     @GetMapping
