@@ -19,6 +19,6 @@ public class RecommendationService {
 
     public Recommendation getActivityRecommendation(String activityId) {
         return recommendationRepository.findByActivityId(activityId)
-                .orElseThrow(() -> new RecommendationNotFoundException("未找到此活动的建议，activityId=" + activityId));
+                .orElseThrow(() -> new RecommendationNotFoundException("未找到活动建议: " + activityId));
     }
 }
