@@ -1,6 +1,35 @@
-
 spring:
   application:
     name: ai-service
   config:
     import: optional:configserver:http://localhost:8888
+
+# ─────────────────────────── 健身规则引擎配置 ───────────────────────────
+# 所有阈值均可在此处调整，无需修改代码
+fitness:
+  rule-engine:
+    load:
+      # 单次训练时长阈值（分钟）
+      single-session-high-minutes: 90
+      single-session-medium-minutes: 45
+      # 7天总时长阈值（分钟）
+      weekly-high-minutes: 300
+      weekly-medium-minutes: 150
+    recovery:
+      # 触发去训练化风险的最小不活跃天数
+      detraining-inactive-days: 5
+      # 触发去训练化风险的最大7天训练次数
+      detraining-max-weekly-activities: 1
+      # 触发疲劳风险的7天最小总时长（分钟）
+      fatigue-weekly-minutes: 300
+    consistency:
+      # 高连续性所需7天最小训练次数
+      high-weekly-activities: 4
+      # 高连续性所需最小连续天数
+      high-consecutive-days: 3
+      # 中等连续性所需7天最小训练次数
+      medium-weekly-activities: 2
+    acute-chronic:
+      # 急慢性负荷比过度训练风险阈值
+      overttraining-high-ratio: 1.5
+      overtraining-medium-ratio: 1.3

@@ -33,7 +33,7 @@ public class ActivityAiService {
 
         Recommendation recommendation = buildRecommendation(context, content);
 
-        recommendationRepository.findByActivityId(activity.getId()).ifPresent(existing -> {
+        recommendationRepository.findLatestStandardByActivityId(activity.getId()).ifPresent(existing -> {
             recommendation.setId(existing.getId());
             log.info("活动 [{}] 已有建议，执行更新", activity.getId());
         });
@@ -49,6 +49,7 @@ public class ActivityAiService {
         List<String> suggestions = extractSection(content, "优化建议：", "下次训练计划：");
 
         return Recommendation.builder()
+                .recommendationType("STANDARD")
                 .activityId(activity.getId())
                 .userId(activity.getUserId())
                 .activityType(activity.getType())

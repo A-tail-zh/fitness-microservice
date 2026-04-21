@@ -20,7 +20,7 @@ public class GoalAnalysisService {
                                       RuleAnalysisResult rule,
                                       List<Activity> recentActivities) {
 
-        if (goal == null || !"ACTIVE".equalsIgnoreCase(goal.getStatus())) {
+        if (goal == null) {
             return GoalAnalysisResult.builder()
                     .goalType("NONE")
                     .progressStatus("NO_ACTIVE_GOAL")
@@ -30,6 +30,46 @@ public class GoalAnalysisService {
                     .strengths(List.of())
                     .gaps(List.of("当前没有有效训练目标，无法进行目标驱动分析"))
                     .actionSuggestions(List.of("建议先设置明确目标，例如减脂、增肌、耐力提升或10公里提升"))
+                    .build();
+        }
+
+        String status = goal.getStatus() == null ? "ACTIVE" : goal.getStatus().toUpperCase(Locale.ROOT);
+        if ("COMPLETED".equals(status)) {
+            return GoalAnalysisResult.builder()
+                    .goalType(goal.getGoalType() == null ? "GENERAL_FITNESS" : goal.getGoalType())
+                    .progressStatus("GOAL_COMPLETED")
+                    .alignmentLevel("HIGH")
+                    .completionScore(100)
+                    .alignmentScore(100)
+                    .strengths(List.of("该目标已达成，近期训练结果与目标一致"))
+                    .gaps(List.of())
+                    .actionSuggestions(List.of("建议设定新的阶段性目标，继续保持当前训练节奏"))
+                    .build();
+        }
+
+        if ("PAUSED".equals(status)) {
+            return GoalAnalysisResult.builder()
+                    .goalType(goal.getGoalType() == null ? "GENERAL_FITNESS" : goal.getGoalType())
+                    .progressStatus("GOAL_PAUSED")
+                    .alignmentLevel("MEDIUM")
+                    .completionScore(0)
+                    .alignmentScore(0)
+                    .strengths(List.of("当前已存在目标，但目标处于暂停状态"))
+                    .gaps(List.of("目标暂停期间，系统不会按进行中目标评估推进度"))
+                    .actionSuggestions(List.of("如需恢复目标追踪，请将目标状态改回进行中"))
+                    .build();
+        }
+
+        if ("ABANDONED".equals(status)) {
+            return GoalAnalysisResult.builder()
+                    .goalType("NONE")
+                    .progressStatus("NO_ACTIVE_GOAL")
+                    .alignmentLevel("UNKNOWN")
+                    .completionScore(0)
+                    .alignmentScore(0)
+                    .strengths(List.of())
+                    .gaps(List.of("最近目标已放弃，当前没有可追踪的训练目标"))
+                    .actionSuggestions(List.of("建议重新设置一个可执行的新目标"))
                     .build();
         }
 

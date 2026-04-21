@@ -23,9 +23,15 @@ import java.util.List;
 public class Recommendation {
     @Id
     private String id;
+    private String recommendationType;
     private String activityId;
     private String userId;
     private String activityType;
+    private String reportType;
+    private LocalDateTime periodStart;
+    private LocalDateTime periodEnd;
+    private Integer overallScore;
+    private String overallStatus;
     private String recommendation;
     private List<String> improvements;
     private List<String> suggestions;

@@ -14,11 +14,11 @@ public class RecommendationService {
     private final RecommendationRepository recommendationRepository;
 
     public List<Recommendation> getUserCommendation(String userId) {
-        return recommendationRepository.findByUserId(userId);
+        return recommendationRepository.findByUserIdOrderByCreatedAtDesc(userId);
     }
 
     public Recommendation getActivityRecommendation(String activityId) {
-        return recommendationRepository.findByActivityId(activityId)
+        return recommendationRepository.findLatestStandardByActivityId(activityId)
                 .orElseThrow(() -> new RecommendationNotFoundException("未找到活动建议: " + activityId));
     }
 }

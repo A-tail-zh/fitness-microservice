@@ -8,10 +8,13 @@ import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
+import java.util.concurrent.TimeoutException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +86,12 @@ public class QwenService {
                     )
                     .bodyToMono(String.class)
                     .timeout(Duration.ofSeconds(60))
+                    .retryWhen(Retry.backoff(2, Duration.ofSeconds(2))
+                            .filter(this::isRetriable)
+                            .doBeforeRetry(signal -> log.warn(
+                                    "千问 API 调用失败，准备重试，第 {} 次，原因: {}",
+                                    signal.totalRetries() + 1,
+                                    signal.failure().getMessage())))
                     .block();
 
             log.debug("千问 API 调用成功");
@@ -95,6 +104,22 @@ public class QwenService {
             log.error("千问 API 调用失败", e);
             throw new RuntimeException("千问 AI 服务调用失败: " + e.getMessage(), e);
         }
+    }
+
+    private boolean isRetriable(Throwable throwable) {
+        if (throwable instanceof WebClientRequestException || throwable instanceof TimeoutException) {
+            return true;
+        }
+
+        Throwable cause = throwable.getCause();
+        while (cause != null) {
+            if (cause instanceof java.net.SocketException || cause instanceof TimeoutException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+
+        return false;
     }
 
     /**
