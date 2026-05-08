@@ -31,6 +31,11 @@ spring:
               predicates:
                 - Path=/api/ai-analysis/**
 
+            - id: notification-service
+              uri: lb://AI-SERVICE
+              predicates:
+                - Path=/api/notifications/**
+
 server:
   port: 8080
 

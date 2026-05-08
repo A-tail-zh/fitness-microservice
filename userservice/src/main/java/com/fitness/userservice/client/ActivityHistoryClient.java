@@ -5,10 +5,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -19,15 +22,6 @@ public class ActivityHistoryClient {
     @Value("${services.activity-service.base-url:http://localhost:8082}")
     private String activityServiceBaseUrl;
 
-    /**
-     * 获取指定用户的活动历史记录列表
-     * <p>
-     * 通过REST API调用活动服务，检索指定用户的所有活动快照信息。
-     *
-     * @param userId 用户唯一标识符，用于查询该用户的活动记录
-     * @return 用户活动快照列表，每个快照包含活动ID、持续时间、开始时间和创建时间等信息；
-     * 如果用户没有任何活动记录，则返回空列表
-     */
     public List<ActivitySnapshot> getUserActivities(String userId) {
         RestClient restClient = restClientBuilder.baseUrl(activityServiceBaseUrl).build();
 
@@ -39,14 +33,32 @@ public class ActivityHistoryClient {
                 });
     }
 
-    /**
-     * 活动快照数据结构
-     */
+    public List<ActivitySnapshot> getUserActivities(List<String> userIdentifiers) {
+        if (userIdentifiers == null || userIdentifiers.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, ActivitySnapshot> merged = new LinkedHashMap<>();
+        userIdentifiers.stream()
+                .filter(StringUtils::hasText)
+                .distinct()
+                .forEach(identifier -> getUserActivities(identifier)
+                        .forEach(activity -> merged.putIfAbsent(activity.getId(), activity)));
+        return List.copyOf(merged.values());
+    }
+
     @Data
     public static class ActivitySnapshot {
         private String id;
+        private String source;
+        private String externalActivityId;
+        private String type;
         private Integer duration;
+        private Integer calorieBurned;
         private LocalDateTime startTime;
+        private LocalDateTime syncedAt;
+        private Map<String, Object> additionalMetrics;
         private LocalDateTime createdAt;
+        private LocalDateTime updatedAt;
     }
 }

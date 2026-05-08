@@ -52,6 +52,13 @@ public class EnhancedAnalysisResponse {
     /** 用户文本备注的 AI 解读（多模态输入融合） */
     private String userNoteInsight;
 
+    private String emailNotificationStatus;
+    private String emailNotificationMessage;
+    private String markdownReport;
+    private String structuredAnalysisJson;
+    private String providerTrace;
+    private Boolean fallbackUsed;
+
     // ─────────────────────────── 嵌套 DTO ───────────────────────────
 
     @Data
@@ -138,6 +145,10 @@ public class EnhancedAnalysisResponse {
     public static class StructuredSuggestion {
         private String category;                // TRAINING / RECOVERY / NUTRITION / LIFESTYLE
         private String priority;                // HIGH / MEDIUM / LOW
+        private String title;
+        private String reason;
+        private String action;
+        private String timeWindow;
         private String content;
         private boolean actionable;
         private String timeframe;               // IMMEDIATE / THIS_WEEK / NEXT_MONTH

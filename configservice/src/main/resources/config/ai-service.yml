@@ -11,7 +11,6 @@ spring:
   data:
     mongodb:
       uri: mongodb://localhost:27017/fitnessrecommendation
-
   rabbitmq:
     host: localhost
     port: 5672
@@ -21,20 +20,44 @@ spring:
       simple:
         retry:
           enabled: true
-          initial-interval: 3000   # 首次重试间隔 3s
-          max-attempts: 3           # 最多重试 3 次
-          multiplier: 2.0           # 指数退避系数
-    
-
+          initial-interval: 3000
+          max-attempts: 3
+          multiplier: 2.0
+  mail:
+    host: smtp.163.com
+    port: 465
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
 
 rabbitmq:
   exchange:
     name: fitness.change
   queue:
-    name: activity.queue  # 修正：添加 name 键
+    name: activity.queue
   routing:
-    key: activity.tracking  # 修正：添加 key 键
+    key: activity.tracking
 
+ai:
+  recommendation:
+    auto-trigger:
+      enabled: ${AI_RECOMMENDATION_AUTO_TRIGGER_ENABLED:false}
+
+notification:
+  exchange:
+    name: fitness.notification
+  queue:
+    email: email.notification.queue
+  routing-key:
+    email: notification.email
+  mail:
+    from: ${MAIL_USERNAME:${spring.mail.username:}}
 
 eureka:
   client:
@@ -45,10 +68,14 @@ eureka:
 
 dashscope:
   api-key: ${QWEN_API_KEY}
-  model: ${QWEN_MODEL:qwen-plus}  # 默认 qwen-plus
+  model: ${QWEN_MODEL:qwen-plus}
   url: ${QWEN_URL}
+
+deepseek:
+  api-key: ${DEEPSEEK_API_KEY:}
+  model: ${DEEPSEEK_MODEL:deepseek-chat}
+  url: ${DEEPSEEK_URL:https://api.deepseek.com/chat/completions}
 
 logging:
   level:
     com.fitness.aiservice: DEBUG
-

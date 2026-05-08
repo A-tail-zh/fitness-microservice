@@ -5,11 +5,13 @@ import com.fitness.aiservice.model.Recommendation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "ai.recommendation.auto-trigger.enabled", havingValue = "true")
 public class ActivityMessageListener {
 
     private final ActivityAiService activityAiService;

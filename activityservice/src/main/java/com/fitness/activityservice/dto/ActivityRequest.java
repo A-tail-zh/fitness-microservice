@@ -11,18 +11,18 @@ import java.util.Map;
 
 @Data
 public class ActivityRequest {
-    @NotBlank(message = "用户ID不能为空")
+    @NotBlank(message = "用户 ID 不能为空")
     private String userId;
 
     @NotNull(message = "运动类型不能为空")
     private ActivityType type;
 
     @NotNull(message = "训练时长不能为空")
-    @Min(value = 1, message = "训练时长必须大于0")
+    @Min(value = 1, message = "训练时长必须大于 0")
     private Integer duration;
 
-    @NotNull(message = "消耗卡路里不能为空")
-    @Min(value = 0, message = "消耗卡路里不能为负数")
+    @NotNull(message = "消耗热量不能为空")
+    @Min(value = 0, message = "消耗热量不能为负数")
     private Integer calorieBurned;
 
     @NotNull(message = "开始时间不能为空")

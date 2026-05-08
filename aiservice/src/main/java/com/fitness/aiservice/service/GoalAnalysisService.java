@@ -7,6 +7,8 @@ import com.fitness.aiservice.dto.UserHistorySummary;
 import com.fitness.aiservice.model.Activity;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -27,6 +29,11 @@ public class GoalAnalysisService {
                     .alignmentLevel("UNKNOWN")
                     .completionScore(0)
                     .alignmentScore(0)
+                    .feasibilityScore(0)
+                    .estimatedWeeksToGoal(null)
+                    .nextMilestone("先完成一次可执行目标设置")
+                    .adjustmentReason("缺少目标信息，无法评估目标可行性")
+                    .recommendedGoalRevision("设置一个 8-12 周、每周 3 次左右的阶段目标")
                     .strengths(List.of())
                     .gaps(List.of("当前没有有效训练目标，无法进行目标驱动分析"))
                     .actionSuggestions(List.of("建议先设置明确目标，例如减脂、增肌、耐力提升或10公里提升"))
@@ -41,6 +48,11 @@ public class GoalAnalysisService {
                     .alignmentLevel("HIGH")
                     .completionScore(100)
                     .alignmentScore(100)
+                    .feasibilityScore(100)
+                    .estimatedWeeksToGoal(0)
+                    .nextMilestone("制定下一阶段目标")
+                    .adjustmentReason("当前目标已完成")
+                    .recommendedGoalRevision("基于最近 30 天训练表现，提高 10%-15% 的目标要求")
                     .strengths(List.of("该目标已达成，近期训练结果与目标一致"))
                     .gaps(List.of())
                     .actionSuggestions(List.of("建议设定新的阶段性目标，继续保持当前训练节奏"))
@@ -54,19 +66,29 @@ public class GoalAnalysisService {
                     .alignmentLevel("MEDIUM")
                     .completionScore(0)
                     .alignmentScore(0)
+                    .feasibilityScore(40)
+                    .estimatedWeeksToGoal(estimateWeeksToTargetDate(goal))
+                    .nextMilestone("恢复目标追踪")
+                    .adjustmentReason("目标暂停导致系统无法判断推进速度")
+                    .recommendedGoalRevision("恢复目标后先执行 1 周低压力训练，再评估是否加量")
                     .strengths(List.of("当前已存在目标，但目标处于暂停状态"))
                     .gaps(List.of("目标暂停期间，系统不会按进行中目标评估推进度"))
                     .actionSuggestions(List.of("如需恢复目标追踪，请将目标状态改回进行中"))
                     .build();
         }
 
-        if ("ABANDONED".equals(status)) {
+        if ("ABANDONED".equals(status) || "INACTIVE".equals(status)) {
             return GoalAnalysisResult.builder()
                     .goalType("NONE")
                     .progressStatus("NO_ACTIVE_GOAL")
                     .alignmentLevel("UNKNOWN")
                     .completionScore(0)
                     .alignmentScore(0)
+                    .feasibilityScore(0)
+                    .estimatedWeeksToGoal(null)
+                    .nextMilestone("重新创建可执行目标")
+                    .adjustmentReason("最近目标已放弃")
+                    .recommendedGoalRevision("根据最近 30 天真实训练量，重新设置一个更保守的阶段目标")
                     .strengths(List.of())
                     .gaps(List.of("最近目标已放弃，当前没有可追踪的训练目标"))
                     .actionSuggestions(List.of("建议重新设置一个可执行的新目标"))
@@ -308,16 +330,90 @@ public class GoalAnalysisService {
             actions.add("保持当前节奏，并持续观察未来 1-2 周的执行情况");
         }
 
+        int feasibilityScore = calculateFeasibilityScore(goalType, completionScore, strengths, gaps);
+        int estimatedWeeks = Math.max(1, (int) Math.ceil((100 - completionScore) / 12.0));
+        String nextMilestone = buildNextMilestone(goalType, completionScore);
+        String adjustmentReason = buildAdjustmentReason(completionScore, gaps);
+        String recommendedGoalRevision = buildRecommendedGoalRevision(goalType, completionScore);
+
         return GoalAnalysisResult.builder()
                 .goalType(goalType)
                 .progressStatus(progressStatus)
                 .alignmentLevel(alignmentLevel)
                 .completionScore(completionScore)
                 .alignmentScore(completionScore)
+                .feasibilityScore(feasibilityScore)
+                .estimatedWeeksToGoal(estimatedWeeks)
+                .nextMilestone(nextMilestone)
+                .adjustmentReason(adjustmentReason)
+                .recommendedGoalRevision(recommendedGoalRevision)
                 .strengths(strengths)
                 .gaps(gaps)
                 .actionSuggestions(actions)
                 .build();
+    }
+
+    private int calculateFeasibilityScore(String goalType, int completionScore, List<String> strengths, List<String> gaps) {
+        int score = completionScore;
+        if (strengths != null && strengths.size() >= 2) {
+            score += 8;
+        }
+        if (gaps != null && gaps.size() >= 3) {
+            score -= 12;
+        }
+        if ("RECOVERY".equalsIgnoreCase(goalType) && completionScore >= 60) {
+            score += 5;
+        }
+        return Math.max(0, Math.min(100, score));
+    }
+
+    private String buildNextMilestone(String goalType, int completionScore) {
+        if (completionScore >= 80) {
+            return "未来 7 天保持当前节奏，并尝试一次小幅专项提升";
+        }
+        if (completionScore >= 60) {
+            return "未来 7 天补齐目标短板，优先保证目标频率和总时长";
+        }
+        return switch (goalType == null ? "" : goalType) {
+            case "TEN_K_IMPROVEMENT" -> "未来 7 天先完成 2 次轻松跑和 1 次节奏训练";
+            case "MUSCLE_GAIN" -> "未来 7 天先完成 3 次力量训练，记录主要动作重量";
+            case "FAT_LOSS", "WEIGHT_LOSS" -> "未来 7 天完成 3 次中低强度有氧，累计至少 150 分钟";
+            case "RECOVERY" -> "未来 7 天以低强度活动和休息为主，观察疲劳反馈";
+            default -> "未来 7 天恢复稳定训练节奏，至少完成 2-3 次训练";
+        };
+    }
+
+    private String buildAdjustmentReason(int completionScore, List<String> gaps) {
+        if (completionScore >= 80) {
+            return "目标执行情况较好，暂不需要明显下调目标";
+        }
+        if (gaps == null || gaps.isEmpty()) {
+            return "目标推进一般，需要继续观察训练连续性";
+        }
+        return "主要限制因素：" + String.join("；", gaps.stream().limit(2).toList());
+    }
+
+    private String buildRecommendedGoalRevision(String goalType, int completionScore) {
+        if (completionScore >= 80) {
+            return "保持当前目标，可将下一阶段目标提高 5%-10%";
+        }
+        if (completionScore >= 60) {
+            return "保留当前目标，把执行周期延长 1-2 周更稳妥";
+        }
+        return switch (goalType == null ? "" : goalType) {
+            case "TEN_K_IMPROVEMENT" -> "先把目标改为稳定完成 5-8 公里训练，再推进 10 公里成绩";
+            case "MUSCLE_GAIN" -> "先设置每周 3 次力量训练和动作递进记录，再设置体重或围度目标";
+            case "FAT_LOSS", "WEIGHT_LOSS" -> "先设置每周训练总时长和频率目标，再设置更激进的体重目标";
+            default -> "建议下调为 8 周内可完成的习惯建立目标";
+        };
+    }
+
+    private Integer estimateWeeksToTargetDate(UserGoalProfile goal) {
+        if (goal == null || goal.getTargetDate() == null) {
+            return null;
+        }
+        long days = ChronoUnit.DAYS.between(LocalDate.now(), goal.getTargetDate());
+        return (int) Math.max(0, Math.ceil(days / 7.0));
     }
 
     private int calculateFrequencyScore(int actual, Integer target) {

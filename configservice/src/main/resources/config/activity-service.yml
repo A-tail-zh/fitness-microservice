@@ -9,13 +9,8 @@ spring:
     username: guest
     password: guest
 
-
-
-
 server:
   port: 8082
-
-#mongodb://localhost:27017/
 
 eureka:
   client:
@@ -24,13 +19,54 @@ eureka:
   instance:
     prefer-ip-address: true
 
-
-
 rabbitmq:
   exchange:
     name: fitness.change
   queue:
-    name: activity.queue  # 修正：添加 name 键
+    name: activity.queue
   routing:
-    key: activity.tracking  # 修正：添加 key 键
+    key: activity.tracking
 
+services:
+  user-service:
+    base-url: http://localhost:8081
+  ai-service:
+    base-url: http://localhost:8083
+
+ai:
+  recommendation:
+    auto-trigger:
+      enabled: ${AI_RECOMMENDATION_AUTO_TRIGGER_ENABLED:false}
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+
+garmin-python-service:
+  base-url: ${GARMIN_SYNC_PYTHON_BASE_URL:http://localhost:8090}
+  launch:
+    enabled: ${GARMIN_SYNC_PYTHON_AUTO_START:false}
+    working-dir: ${GARMIN_SYNC_PYTHON_WORKDIR:}
+    python-executable: ${GARMIN_SYNC_PYTHON_EXECUTABLE:}
+    app: ${GARMIN_SYNC_PYTHON_APP:app:app}
+    host: ${GARMIN_SYNC_PYTHON_HOST:127.0.0.1}
+    port: ${GARMIN_SYNC_PYTHON_PORT:8090}
+    startup-timeout-seconds: ${GARMIN_SYNC_PYTHON_STARTUP_TIMEOUT:20}
+
+garmin-auto-sync:
+  enabled: ${GARMIN_AUTO_SYNC_ENABLED:false}
+  days: ${GARMIN_AUTO_SYNC_DAYS:3}
+  initial-delay-ms: ${GARMIN_AUTO_SYNC_INITIAL_DELAY_MS:60000}
+  fixed-delay-ms: ${GARMIN_AUTO_SYNC_FIXED_DELAY_MS:1800000}
+
+garmin:
+  sync:
+    default-days: ${GARMIN_SYNC_DEFAULT_DAYS:3}
+  ai-assessment:
+    recent-activity-limit: ${GARMIN_AI_ASSESSMENT_RECENT_ACTIVITY_LIMIT:5}
+  client-id: ${GARMIN_CLIENT_ID:}
+  client-secret: ${GARMIN_CLIENT_SECRET:}
+  redirect-uri: ${GARMIN_REDIRECT_URI:http://localhost:8080/api/activities/import/garmin/callback}
+  auth-url: ${GARMIN_AUTH_URL:https://connect.garmin.com/oauth2/authorize}
+  token-url: ${GARMIN_TOKEN_URL:https://connect.garmin.com/oauth2/token}
+  activity-url: ${GARMIN_ACTIVITY_URL:https://apis.garmin.com/wellness-api/rest/activities}
+  scope: ${GARMIN_SCOPE:activity:read}

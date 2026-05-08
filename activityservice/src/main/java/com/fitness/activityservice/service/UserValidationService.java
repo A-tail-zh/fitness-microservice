@@ -16,17 +16,16 @@ public class UserValidationService {
     private final WebClient userServiceWebClient;
 
     public boolean validateUser(String userId) {
-        log.info("调用用户校验接口，keycloakId={}", userId);
+        log.info("调用用户校验接口，identifier={}", userId);
         try {
             return Boolean.TRUE.equals(userServiceWebClient.get()
                     .uri("/api/users/{userId}/validate", userId)
                     .retrieve()
                     .bodyToMono(Boolean.class)
                     .block());
-
         } catch (WebClientResponseException e) {
             if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
-                throw new InvalidUserException("用户未找到: " + userId);
+                throw new InvalidUserException("未找到用户: " + userId);
             }
             if (e.getStatusCode() == HttpStatus.BAD_REQUEST) {
                 throw new InvalidUserException("用户校验参数错误: " + userId);

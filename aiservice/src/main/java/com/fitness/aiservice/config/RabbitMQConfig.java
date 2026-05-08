@@ -14,33 +14,55 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     @Value("${rabbitmq.queue.name}")
-    private String queue;
+    private String activityQueueName;
 
     @Value("${rabbitmq.exchange.name}")
-    private String exchange;
+    private String activityExchangeName;
 
     @Value("${rabbitmq.routing.key}")
-    private String routingKey;
+    private String activityRoutingKey;
+
+    @Value("${notification.queue.email}")
+    private String emailQueueName;
+
+    @Value("${notification.exchange.name}")
+    private String notificationExchangeName;
+
+    @Value("${notification.routing-key.email}")
+    private String emailRoutingKey;
 
     @Bean
     public Queue activityQueue() {
-        return new Queue(queue,true);
+        return new Queue(activityQueueName, true);
     }
 
     @Bean
     public DirectExchange activityExchange() {
-        return new DirectExchange(exchange);
+        return new DirectExchange(activityExchangeName);
     }
 
     @Bean
-    public Binding activityBinding(Queue activityQueue, DirectExchange activityExchange){
-        return BindingBuilder.bind(activityQueue).to(activityExchange).with(routingKey);
+    public Binding activityBinding(Queue activityQueue, DirectExchange activityExchange) {
+        return BindingBuilder.bind(activityQueue).to(activityExchange).with(activityRoutingKey);
+    }
+
+    @Bean
+    public Queue emailNotificationQueue() {
+        return new Queue(emailQueueName, true);
+    }
+
+    @Bean
+    public DirectExchange notificationExchange() {
+        return new DirectExchange(notificationExchangeName);
+    }
+
+    @Bean
+    public Binding emailNotificationBinding(Queue emailNotificationQueue, DirectExchange notificationExchange) {
+        return BindingBuilder.bind(emailNotificationQueue).to(notificationExchange).with(emailRoutingKey);
     }
 
     @Bean
     public MessageConverter jsonMessageConverter() {
-        //将java对象转换成json
         return new Jackson2JsonMessageConverter();
     }
-
 }

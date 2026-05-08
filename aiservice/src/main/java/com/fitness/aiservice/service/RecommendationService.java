@@ -21,4 +21,8 @@ public class RecommendationService {
         return recommendationRepository.findLatestStandardByActivityId(activityId)
                 .orElseThrow(() -> new RecommendationNotFoundException("未找到活动建议: " + activityId));
     }
+
+    public long deleteByActivityId(String activityId) {
+        return recommendationRepository.deleteByActivityId(activityId);
+    }
 }

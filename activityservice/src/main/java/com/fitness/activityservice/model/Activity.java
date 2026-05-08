@@ -22,12 +22,15 @@ public class Activity {
     @Id
     private String id;
     private String userId;
+    private ActivitySource source;
+    private String externalActivityId;
     private ActivityType type;
-    private Integer duration;//持续时间
+    private Integer duration;
     private Integer calorieBurned;
     private LocalDateTime startTime;
+    private LocalDateTime syncedAt;
     @Field("metrics")
-    private Map<String,Object> additionalMetrics;//额外的指标
+    private Map<String, Object> additionalMetrics;
     @CreatedDate
     private LocalDateTime createdAt;
     @LastModifiedDate

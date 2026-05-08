@@ -15,4 +15,6 @@ public interface RecommendationRepository extends MongoRepository<Recommendation
     @Query(value = "{ 'activityId': ?0, '$or': [ { 'recommendationType': 'STANDARD' }, { 'recommendationType': null } ] }",
             sort = "{ 'createdAt': -1 }")
     Optional<Recommendation> findLatestStandardByActivityId(String activityId);
+
+    long deleteByActivityId(String activityId);
 }

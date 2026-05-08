@@ -1,22 +1,25 @@
 package com.fitness.userservice.service;
 
 import com.fitness.userservice.client.ActivityHistoryClient;
+import com.fitness.userservice.client.GoalNotificationClient;
 import com.fitness.userservice.dto.UserGoalRequest;
 import com.fitness.userservice.dto.UserGoalResponse;
 import com.fitness.userservice.exception.UserGoalNotFoundException;
-import com.fitness.userservice.exception.UserNotFoundException;
 import com.fitness.userservice.model.GoalPriority;
 import com.fitness.userservice.model.GoalStatus;
+import com.fitness.userservice.model.GoalType;
 import com.fitness.userservice.model.User;
 import com.fitness.userservice.model.UserGoal;
 import com.fitness.userservice.repository.UserGoalRepository;
-import com.fitness.userservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 @Service
 @Slf4j
@@ -27,31 +30,13 @@ public class UserGoalService {
 
     private final ActivityHistoryClient activityHistoryClient;
     private final UserGoalRepository userGoalRepository;
-    private final UserRepository userRepository;
+    private final UserService userService;
+    private final GoalNotificationClient goalNotificationClient;
 
-
-    /**
-     * 创建用户健身目标
-     * <p>
-     * 为指定用户创建新的健身目标。该方法执行以下操作：
-     * - 验证用户是否存在，不存在则抛出UserNotFoundException；
-     * - 检查用户是否有正在进行的目标（ACTIVE状态），如有则将其暂停（PAUSED）；
-     * - 创建新的目标记录，设置目标类型、目标值、单位、周频率、周时长、目标日期、经验等级、优先级等信息；
-     * - 默认将新目标状态设置为ACTIVE；
-     * - 如果未指定优先级，则默认为MEDIUM；
-     * - 保存后自动检测目标是否已完成；
-     * - 记录创建成功的日志并返回目标信息。
-     *
-     * @param userId  用户唯一标识符，用于定位创建目标的用户
-     * @param request 用户目标请求对象，包含目标的详细信息（目标类型、目标值、单位、频率、时长、日期、经验等级、优先级、备注等）
-     * @return UserGoalResponse对象，包含创建成功的目标完整信息
-     * @throws UserNotFoundException 当指定的用户ID在数据库中不存在时抛出
-     */
     public UserGoalResponse createGoal(String userId, UserGoalRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("未找到用户，id=" + userId));
+        User user = userService.resolveUserOrThrow(userId);
 
-        userGoalRepository.findFirstByUserIdAndStatusOrderByUpdatedAtDesc(userId, GoalStatus.ACTIVE)
+        userGoalRepository.findFirstByUserIdAndStatusOrderByUpdatedAtDesc(user.getId(), GoalStatus.ACTIVE)
                 .ifPresent(activeGoal -> {
                     activeGoal.setStatus(GoalStatus.PAUSED);
                     userGoalRepository.save(activeGoal);
@@ -70,51 +55,33 @@ public class UserGoalService {
         goal.setNote(request.getNote());
         goal.setStatus(GoalStatus.ACTIVE);
 
-        UserGoal saved = refreshGoalCompletion(userGoalRepository.save(goal));
-        log.info("创建用户目标成功，userId={}, goalId={}, goalType={}", userId, saved.getId(), saved.getGoalType());
+        UserGoal saved = refreshGoalCompletion(user, userGoalRepository.save(goal));
+        log.info("创建用户目标成功，userId={}, goalId={}, goalType={}", user.getId(), saved.getId(), saved.getGoalType());
         return toResponse(saved);
     }
 
-
-    /**
-     * 获取用户当前活跃的健身目标
-     * <p>
-     * 查询指定用户当前正在进行的健身目标（ACTIVE状态）。该方法会：
-     * - 验证用户是否存在，不存在则抛出UserNotFoundException；
-     * - 自动刷新用户所有活跃目标的完成状态；
-     * - 查询用户最新的ACTIVE状态目标（按更新时间降序）；
-     * - 如果未找到活跃目标则抛出UserGoalNotFoundException；
-     * - 将目标对象转换为响应对象返回。
-     *
-     * @param userId 用户唯一标识符，用于定位要查询的用户
-     * @return UserGoalResponse对象，包含用户当前活跃目标的详细信息
-     * @throws UserNotFoundException     当指定的用户ID在数据库中不存在时抛出
-     * @throws UserGoalNotFoundException 当用户没有任何ACTIVE状态的目标时抛出
-     */
     public UserGoalResponse getActiveGoal(String userId) {
-        ensureUserExists(userId);
-        refreshAutomaticCompletion(userId);
-        UserGoal goal = userGoalRepository.findFirstByUserIdAndStatusOrderByUpdatedAtDesc(userId, GoalStatus.ACTIVE)
+        User user = userService.resolveUserOrThrow(userId);
+        refreshAutomaticCompletion(user);
+        UserGoal goal = userGoalRepository.findFirstByUserIdAndStatusOrderByUpdatedAtDesc(user.getId(), GoalStatus.ACTIVE)
                 .orElseThrow(() -> new UserGoalNotFoundException("未找到当前有效目标，userId=" + userId));
         return toResponse(goal);
     }
 
-
     public List<UserGoalResponse> getAllGoals(String userId) {
-        ensureUserExists(userId);
-        refreshAutomaticCompletion(userId);
-        return userGoalRepository.findByUserIdOrderByCreatedAtDesc(userId)
+        User user = userService.resolveUserOrThrow(userId);
+        refreshAutomaticCompletion(user);
+        return userGoalRepository.findByUserIdOrderByCreatedAtDesc(user.getId())
                 .stream()
                 .map(this::toResponse)
                 .toList();
     }
 
-
     public UserGoalResponse updateGoal(String userId, String goalId, UserGoalRequest request) {
-        ensureUserExists(userId);
+        User user = userService.resolveUserOrThrow(userId);
 
         UserGoal goal = userGoalRepository.findById(goalId)
-                .filter(item -> item.getUserId().equals(userId))
+                .filter(item -> item.getUserId().equals(user.getId()))
                 .orElseThrow(() -> new UserGoalNotFoundException("未找到目标，goalId=" + goalId));
 
         goal.setGoalType(request.getGoalType());
@@ -127,39 +94,22 @@ public class UserGoalService {
         goal.setPriority(request.getPriority() == null ? goal.getPriority() : request.getPriority());
         goal.setNote(request.getNote());
 
-        UserGoal saved = refreshGoalCompletion(userGoalRepository.save(goal));
-        log.info("更新用户目标成功，userId={}, goalId={}", userId, goalId);
+        UserGoal saved = refreshGoalCompletion(user, userGoalRepository.save(goal));
+        log.info("更新用户目标成功，userId={}, goalId={}", user.getId(), goalId);
         return toResponse(saved);
     }
 
-
-    /**
-     * 更新用户健身目标的状态
-     * <p>
-     * 修改指定健身目标的状态（如ACTIVE、PAUSED、COMPLETED等）。该方法会：
-     * - 验证用户是否存在；
-     * - 验证目标是否存在且属于该用户；
-     * - 如果新状态为ACTIVE，则自动将用户其他ACTIVE状态的目标暂停（确保只有一个活跃目标）；
-     * - 更新目标状态并保存到数据库；
-     * - 如果新状态为ACTIVE，保存后自动检测目标是否已完成；
-     * - 记录状态更新成功的日志并返回更新后的目标信息。
-     *
-     * @param userId 用户唯一标识符，用于验证目标归属权
-     * @param goalId 目标唯一标识符，用于定位要更新状态的目标
-     * @param status 新的目标状态，可选值包括ACTIVE、PAUSED、COMPLETED等
-     * @return UserGoalResponse对象，包含更新状态后的目标详细信息
-     * @throws UserNotFoundException     当指定的用户ID在数据库中不存在时抛出
-     * @throws UserGoalNotFoundException 当指定的目标ID不存在或不属于该用户时抛出
-     */
     public UserGoalResponse updateGoalStatus(String userId, String goalId, GoalStatus status) {
-        ensureUserExists(userId);
+        User user = userService.resolveUserOrThrow(userId);
 
         UserGoal goal = userGoalRepository.findById(goalId)
-                .filter(item -> item.getUserId().equals(userId))
+                .filter(item -> item.getUserId().equals(user.getId()))
                 .orElseThrow(() -> new UserGoalNotFoundException("未找到目标，goalId=" + goalId));
 
+        GoalStatus previousStatus = goal.getStatus();
+
         if (status == GoalStatus.ACTIVE) {
-            userGoalRepository.findFirstByUserIdAndStatusOrderByUpdatedAtDesc(userId, GoalStatus.ACTIVE)
+            userGoalRepository.findFirstByUserIdAndStatusOrderByUpdatedAtDesc(user.getId(), GoalStatus.ACTIVE)
                     .filter(activeGoal -> !activeGoal.getId().equals(goalId))
                     .ifPresent(activeGoal -> {
                         activeGoal.setStatus(GoalStatus.PAUSED);
@@ -170,76 +120,39 @@ public class UserGoalService {
         goal.setStatus(status);
         UserGoal saved = userGoalRepository.save(goal);
         if (status == GoalStatus.ACTIVE) {
-            saved = refreshGoalCompletion(saved);
+            saved = refreshGoalCompletion(user, saved);
+        } else if (status == GoalStatus.COMPLETED && previousStatus != GoalStatus.COMPLETED) {
+            sendGoalCompletedNotification(user, saved, loadActivities(user));
         }
-        log.info("更新目标状态成功，userId={}, goalId={}, status={}", userId, goalId, status);
+
+        log.info("更新目标状态成功，userId={}, goalId={}, status={}", user.getId(), goalId, status);
         return toResponse(saved);
     }
 
-
-    /**
-     * 刷新用户所有活跃目标的自动完成状态
-     * <p>
-     * 批量检查并更新指定用户的所有ACTIVE状态目标。该方法会：
-     * - 查询用户所有处于ACTIVE状态的目标；
-     * - 如果没有活跃目标则直接返回；
-     * - 调用活动历史服务获取用户的活动数据；
-     * - 遍历所有活跃目标，逐一判断并更新完成状态；
-     * - 如果调用活动历史服务失败，记录警告日志但不抛出异常。
-     *
-     * @param userId 用户唯一标识符，用于查询该用户下的所有活跃目标
-     */
-    private void refreshAutomaticCompletion(String userId) {
-        List<UserGoal> activeGoals = userGoalRepository.findByUserIdAndStatus(userId, GoalStatus.ACTIVE);
+    private void refreshAutomaticCompletion(User user) {
+        List<UserGoal> activeGoals = userGoalRepository.findByUserIdAndStatus(user.getId(), GoalStatus.ACTIVE);
         if (activeGoals.isEmpty()) {
             return;
         }
 
         try {
-            List<ActivityHistoryClient.ActivitySnapshot> activities = activityHistoryClient.getUserActivities(userId);
-            activeGoals.forEach(goal -> refreshGoalCompletion(goal, activities));
+            List<ActivityHistoryClient.ActivitySnapshot> activities = loadActivities(user);
+            activeGoals.forEach(goal -> refreshGoalCompletion(user, goal, activities));
         } catch (Exception e) {
-            log.warn("自动判断目标是否达标失败，userId={}", userId, e);
+            log.warn("刷新目标自动完成状态失败，userId={}", user.getId(), e);
         }
     }
 
-
-    /**
-     * 刷新单个目标的完成状态
-     * <p>
-     * 获取用户的历史活动数据并判断指定目标是否应标记为完成。该方法会：
-     * - 调用活动历史服务获取用户的活动快照列表；
-     * - 委托给重载方法refreshGoalCompletion(goal, activities)进行实际的完成状态判断；
-     * - 如果调用活动历史服务失败，记录警告日志并返回原目标（不抛出异常）。
-     *
-     * @param goal 用户目标对象，包含需要检查完成状态的目标信息
-     * @return UserGoal对象，如果满足自动完成条件则返回已更新为COMPLETED状态的目标，否则返回原目标或发生异常时返回原目标
-     */
-    private UserGoal refreshGoalCompletion(UserGoal goal) {
+    private UserGoal refreshGoalCompletion(User user, UserGoal goal) {
         try {
-            List<ActivityHistoryClient.ActivitySnapshot> activities = activityHistoryClient.getUserActivities(goal.getUserId());
-            return refreshGoalCompletion(goal, activities);
+            return refreshGoalCompletion(user, goal, loadActivities(user));
         } catch (Exception e) {
-            log.warn("创建或更新后自动判断目标失败，goalId={}", goal.getId(), e);
+            log.warn("保存后刷新目标完成状态失败，goalId={}", goal.getId(), e);
             return goal;
         }
     }
 
-
-    /**
-     * 刷新目标完成状态
-     * <p>
-     * 根据用户的历史活动数据判断并更新目标的完成状态。该方法会：
-     * - 检查目标是否满足自动完成的条件（通过shouldAutoComplete方法判断）；
-     * - 如果满足条件，将目标状态更新为COMPLETED；
-     * - 保存更新后的目标到数据库；
-     * - 记录自动完成日志并返回更新后的目标对象。
-     *
-     * @param goal       用户目标对象，包含需要检查完成状态的目标信息
-     * @param activities 用户历史活动快照列表，用于判断目标是否达成
-     * @return UserGoal对象，如果满足自动完成条件则返回已更新为COMPLETED状态的目标，否则返回原目标
-     */
-    private UserGoal refreshGoalCompletion(UserGoal goal, List<ActivityHistoryClient.ActivitySnapshot> activities) {
+    private UserGoal refreshGoalCompletion(User user, UserGoal goal, List<ActivityHistoryClient.ActivitySnapshot> activities) {
         if (!shouldAutoComplete(goal, activities)) {
             return goal;
         }
@@ -247,24 +160,10 @@ public class UserGoalService {
         goal.setStatus(GoalStatus.COMPLETED);
         UserGoal saved = userGoalRepository.save(goal);
         log.info("系统已自动将目标标记为已完成，userId={}, goalId={}", goal.getUserId(), goal.getId());
+        sendGoalCompletedNotification(user, saved, activities);
         return saved;
     }
 
-
-    /**
-     * 判断目标是否应自动标记为完成
-     * <p>
-     * 根据用户的历史活动数据判断指定目标是否满足自动完成的条件。该方法会：
-     * - 验证目标状态是否为ACTIVE，非活跃状态直接返回false；
-     * - 检查目标是否设置了频率或时长指标，两者都没有则返回false；
-     * - 截取最近7天（AUTO_COMPLETE_WINDOW_DAYS）内的活动记录；
-     * - 分别判断频率指标和时长指标是否都达成；
-     * - 只有当所有设定的指标都满足时，才返回true。
-     *
-     * @param goal       用户目标对象，包含需要判断完成状态的目标信息，必须包含周频率或周时长目标
-     * @param activities 用户历史活动快照列表，用于计算近期活动数据
-     * @return boolean值，true表示目标应自动标记为完成，false表示不满足自动完成条件
-     */
     private boolean shouldAutoComplete(UserGoal goal, List<ActivityHistoryClient.ActivitySnapshot> activities) {
         if (goal == null || goal.getStatus() != GoalStatus.ACTIVE) {
             return false;
@@ -290,15 +189,59 @@ public class UserGoalService {
         return frequencyMet && durationMet;
     }
 
+    private void sendGoalCompletedNotification(
+            User user,
+            UserGoal goal,
+            List<ActivityHistoryClient.ActivitySnapshot> activities) {
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            log.debug("Skip goal completed email because user email is empty, userId={}, goalId={}", user.getId(), goal.getId());
+            return;
+        }
+        try {
+            ActivityHistoryClient.ActivitySnapshot latestActivity = latestActivity(activities);
+            goalNotificationClient.sendGoalCompletedEmail(GoalNotificationClient.GoalCompletedNotificationRequest.builder()
+                    .userId(user.getId())
+                    .email(user.getEmail())
+                    .username(resolveUsername(user))
+                    .goalId(goal.getId())
+                    .goalName(resolveGoalName(goal.getGoalType()))
+                    .goalType(goal.getGoalType() == null ? null : goal.getGoalType().name())
+                    .completedAt(LocalDateTime.now().toString())
+                    .goalPeriod(resolveGoalPeriod(goal))
+                    .completionDescription("目标进度已达到 100%，系统已判定本阶段目标完成。")
+                    .nextStepAdvice(buildGoalSuggestion(goal, latestActivity))
+                    .distance(extractDoubleMetric(latestActivity, "距离（米）", "distance", "distanceInMeters"))
+                    .durationSeconds(latestActivity == null || latestActivity.getDuration() == null
+                            ? null
+                            : latestActivity.getDuration() * 60)
+                    .avgHeartRate(extractIntegerMetric(latestActivity, "平均心率", "avgHeartRate", "averageHeartRateInBeatsPerMinute"))
+                    .calories(latestActivity == null || latestActivity.getCalorieBurned() == null
+                            ? null
+                            : latestActivity.getCalorieBurned().doubleValue())
+                    .aiSuggestion(buildGoalSuggestion(goal, latestActivity))
+                    .build());
+        } catch (Exception ex) {
+            log.warn("发送目标完成邮件失败，userId={}, goalId={}", user.getId(), goal.getId(), ex);
+        }
+    }
 
-    /**
-     * 获取活动时间
-     * <p>
-     * 获取指定活动记录的开始时间或创建时间，用于判断活动是否在指定时间段内。
-     *
-     * @param activity 活动记录对象，包含开始时间和创建时间
-     * @return LocalDateTime对象，表示活动时间，如果开始时间和创建时间都为null则返回null
-     */
+    private ActivityHistoryClient.ActivitySnapshot latestActivity(List<ActivityHistoryClient.ActivitySnapshot> activities) {
+        if (activities == null || activities.isEmpty()) {
+            return null;
+        }
+        return activities.stream()
+                .filter(Objects::nonNull)
+                .max((left, right) -> {
+                    LocalDateTime leftTime = activityTime(left);
+                    LocalDateTime rightTime = activityTime(right);
+                    if (leftTime == null && rightTime == null) return 0;
+                    if (leftTime == null) return -1;
+                    if (rightTime == null) return 1;
+                    return leftTime.compareTo(rightTime);
+                })
+                .orElse(null);
+    }
+
     private LocalDateTime activityTime(ActivityHistoryClient.ActivitySnapshot activity) {
         if (activity == null) {
             return null;
@@ -306,12 +249,102 @@ public class UserGoalService {
         return activity.getStartTime() != null ? activity.getStartTime() : activity.getCreatedAt();
     }
 
-
-    private void ensureUserExists(String userId) {
-        userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("未找到用户，id=" + userId));
+    private List<ActivityHistoryClient.ActivitySnapshot> loadActivities(User user) {
+        return activityHistoryClient.getUserActivities(Stream.of(user.getId(), user.getKeycloakId())
+                .filter(Objects::nonNull)
+                .toList());
     }
 
+    private String resolveUsername(User user) {
+        String fullName = ((user.getFirstName() == null ? "" : user.getFirstName())
+                + (user.getLastName() == null ? "" : user.getLastName())).trim();
+        if (!fullName.isBlank()) {
+            return fullName;
+        }
+        if (user.getEmail() != null && user.getEmail().contains("@")) {
+            return user.getEmail().substring(0, user.getEmail().indexOf('@'));
+        }
+        return "用户";
+    }
+
+    private String resolveGoalName(GoalType goalType) {
+        if (goalType == null) {
+            return "本阶段目标";
+        }
+        return switch (goalType) {
+            case FAT_LOSS -> "减脂目标";
+            case WEIGHT_LOSS -> "减重目标";
+            case MUSCLE_GAIN -> "增肌目标";
+            case ENDURANCE -> "耐力提升目标";
+            case TEN_K_IMPROVEMENT -> "10 公里成绩提升目标";
+            case GENERAL_FITNESS -> "综合体能目标";
+            case RECOVERY -> "恢复训练目标";
+        };
+    }
+
+    private String resolveGoalPeriod(UserGoal goal) {
+        String start = goal.getCreatedAt() == null ? "创建时间未知" : goal.getCreatedAt().toLocalDate().toString();
+        String end = goal.getTargetDate() == null ? "未设置截止日期" : goal.getTargetDate().toString();
+        return start + " 至 " + end;
+    }
+
+    private String buildGoalSuggestion(UserGoal goal, ActivityHistoryClient.ActivitySnapshot latestActivity) {
+        String type = latestActivity == null ? "" : String.valueOf(latestActivity.getType());
+        return switch (goal.getGoalType()) {
+            case FAT_LOSS, WEIGHT_LOSS -> "你已经达成阶段目标，建议下一阶段保持稳定有氧频率，并继续控制恢复与饮食节奏。";
+            case MUSCLE_GAIN -> "恭喜完成增肌阶段目标，建议下一阶段重点关注力量递进和睡眠恢复。";
+            case ENDURANCE, TEN_K_IMPROVEMENT -> "有氧能力正在提升，本次强度完成度较高，建议下一次安排轻松跑或恢复训练。";
+            case RECOVERY -> "恢复阶段目标已完成，建议后续逐步恢复常规训练强度，避免一次性加量过快。";
+            case GENERAL_FITNESS -> type != null && type.contains("RUN")
+                    ? "综合体能目标已完成，建议继续保持跑步与力量训练的组合安排。"
+                    : "综合体能目标已完成，建议继续保持有氧与力量训练均衡。";
+        };
+    }
+
+    private Double extractDoubleMetric(ActivityHistoryClient.ActivitySnapshot activity, String... keys) {
+        if (activity == null || activity.getAdditionalMetrics() == null) {
+            return null;
+        }
+        for (String key : keys) {
+            Object value = activity.getAdditionalMetrics().get(key);
+            if (value instanceof Number number) {
+                return normalizeMetricValue(activity, key, number.doubleValue());
+            }
+            if (value instanceof String text) {
+                try {
+                    return normalizeMetricValue(activity, key, Double.parseDouble(text));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return null;
+    }
+
+    private Double normalizeMetricValue(ActivityHistoryClient.ActivitySnapshot activity, String key, Double value) {
+        if (value == null || activity == null || activity.getSource() == null) {
+            return value;
+        }
+        if (!"GARMIN".equalsIgnoreCase(activity.getSource())) {
+            return value;
+        }
+        if ("distanceKm".equals(key)) {
+            return value;
+        }
+        if ("distanceInMeters".equals(key) || "distance_m".equals(key)) {
+            return value / 1000.0d;
+        }
+        if ("distance".equals(key)) {
+            return activity.getAdditionalMetrics().containsKey("distanceKm")
+                    ? value
+                    : value / 1000.0d;
+        }
+        return value;
+    }
+
+    private Integer extractIntegerMetric(ActivityHistoryClient.ActivitySnapshot activity, String... keys) {
+        Double number = extractDoubleMetric(activity, keys);
+        return number == null ? null : (int) Math.round(number);
+    }
 
     private UserGoalResponse toResponse(UserGoal goal) {
         return UserGoalResponse.builder()

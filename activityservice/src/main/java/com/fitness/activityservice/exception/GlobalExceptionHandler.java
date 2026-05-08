@@ -1,18 +1,23 @@
 package com.fitness.activityservice.exception;
 
 import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MultipartException;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ActivityNotFoundException.class)
@@ -41,8 +46,29 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, "请求参数不合法", ex.getMessage());
     }
 
+    @ExceptionHandler({
+            MissingRequestHeaderException.class,
+            MissingServletRequestParameterException.class,
+            MultipartException.class
+    })
+    public ResponseEntity<Map<String, Object>> handleMissingRequestPart(Exception ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "请求参数不完整", ex.getMessage());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "请求参数不合法", ex.getMessage());
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalStateException(IllegalStateException ex) {
+        log.warn("业务状态异常：{}", ex.getMessage(), ex);
+        return buildResponse(HttpStatus.BAD_REQUEST, "业务处理失败", ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleException(Exception ex) {
+        log.error("服务器内部错误", ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "服务器内部错误", ex.getMessage());
     }
 
